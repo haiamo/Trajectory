@@ -10,6 +10,7 @@ import numpy as np
 import os,sys
 import logging as lg
 import pandas as pd
+import copy as cp
 
 def ConvertGray2Bilevel(infile, rate, b_file_out):
 	'''
