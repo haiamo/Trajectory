@@ -100,12 +100,14 @@ def GetObjectByCCL(biimg_mat):
 					if tmp_ru>0:
 						if not(tmp_ru in nbh_lbls):
 							nbh_lbls.append(tmp_ru)
-						lbl_eql=RenewNeighborEquivalance(lbl_eql,tmp_ru,tmp_cu)
+						lbl_eql=RenewNeighborEquivalance(lbl_eql,tmp_cu,tmp_ru)
+						lbl_eql=RenewNeighborEquivalance(lbl_eql,tmp_lu,tmp_ru)
 					if tmp_lc>0:
 						if not(tmp_lc in nbh_lbls):
 							nbh_lbls.append(tmp_lc)
 						lbl_eql=RenewNeighborEquivalance(lbl_eql,tmp_cu,tmp_lc)
 						lbl_eql=RenewNeighborEquivalance(lbl_eql,tmp_lu,tmp_lc)
+						lbl_eql=RenewNeighborEquivalance(lbl_eql,tmp_ru,tmp_lc)
 									
 				elif rowi>0 and coli==0:#left boundary w/o left-up corner
 				# this mode just need check two neighbors
@@ -160,6 +162,7 @@ def GetObjectByCCL(biimg_mat):
 				lg.debug('Label ID is %d, after assigning it to pixel label.',lbl_id)
 				lg.debug("Pixel's label is %d",labels[rowi][coli])
 	
+	labels_fstpass=cp.deepcopy(labels)
 	# renew label equivalance
 	'''
 	for kk in lbl_eql:
@@ -179,7 +182,44 @@ def GetObjectByCCL(biimg_mat):
 			if cur_px_lbl>0 and cur_px_lbl in lbl_eql:
 				labels[rowi][coli]=lbl_eql.get(cur_px_lbl)
 	
-	return labels,origin_l_equ,lbl_eql
+	# Calculate the center of object.
+	obj_list={}
+	for rowi in range(len(labels)):
+		for coli in range(len(labels[0])):
+			cur_px_lbl=labels[rowi][coli]
+			if cur_px_lbl>0:
+				if not(cur_px_lbl in obj_list):
+					obj_list[cur_px_lbl]=[]
+					obj_list[cur_px_lbl].append([rowi,coli])
+				else:
+					obj_list[cur_px_lbl].append([rowi,coli])
+	
+	obj_mon={}
+	for k in obj_list:
+		if not(k in obj_mon):
+			obj_mon[k]=[0,0,0]
+
+		for pts in range(len(obj_list[k])):
+			xcr=pow(obj_list[k][pts][0],1)
+			ycr=pow(obj_list[k][pts][1],1)
+			obj_mon[k][0]+=1 # Order-zero moment(area)
+			obj_mon[k][1]+=xcr # First order moment of x-axis
+			obj_mon[k][2]+=ycr # First order moment of y-axis
+		
+		obj_mon[k][1]=obj_mon[k][1]/obj_mon[k][0]
+		obj_mon[k][2]=obj_mon[k][2]/obj_mon[k][0]
+	
+	obj_100pts={}
+	xlist=[]
+	ylist=[]
+	for k in obj_mon:
+		if obj_mon[k][0]>100:
+			obj_100pts[k]=obj_mon[k]
+			xlist.append(obj_mon[k][1])
+			ylist.append(obj_mon[k][2])
+	
+	
+	return labels_fstpass,labels,origin_l_equ,lbl_eql,obj_100pts,xlist,ylist
 	
 
 def RenewNeighborEquivalance(LEDict,lbl1,lbl2):
@@ -204,9 +244,9 @@ if __name__=='__main__':
 	lg.basicConfig(filename='tr.log', level=lg.DEBUG, format=LOG_FORMAT)
 	
 	biimg=[]
-	'''
+	
 	labels=[]
-	biimg=ConvertGray2Bilevel('snap0.bmp',0.95,False)
+	biimg=ConvertGray2Bilevel('snap0.bmp',0.8,False)
 	'''
 	from xlrd import *
 	xfile=open_workbook('tstbiimg.xlsx')
@@ -218,6 +258,9 @@ if __name__=='__main__':
 			for coli in range(s.ncols):
 				r_vals.append(s.cell(rowi,coli).value)
 			biimg.append(r_vals)
-	labels,ori_l_equ,label_equ=GetObjectByCCL(biimg)
+	'''
+	labels_fstpass,labels,ori_l_equ,label_equ,obj_mon,xlist,ylist=GetObjectByCCL(biimg)
+	df1=pd.DataFrame(labels_fstpass)
+	df1.to_csv('labels_1stPass.txt')
 	df=pd.DataFrame(labels)
 	df.to_csv('labels.txt')
